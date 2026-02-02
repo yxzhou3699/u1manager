@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>U1 Team Manager</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.21.0/dist/umd/supabase.min.js"></script>
     <style>
         body { font-family: -apple-system, sans-serif; background: #f0f2f5; padding: 15px; margin: 0; }
         .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
@@ -18,9 +18,8 @@
         .going { background: #d4edda; color: #155724; }
         .not { background: #f8d7da; color: #721c24; }
         .none { background: #e9ecef; color: #6c757d; }
-        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); align-items: center; justify-content: center; z-index: 1000; }
-        .modal:not(.hidden) { display: flex; }
-        .modal-content { background: white; padding: 20px; border-radius: 12px; width: 80%; max-width: 350px; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; }
+        .modal-content { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 12px; width: 80%; max-width: 350px; z-index: 1001; }
     </style>
 </head>
 <body>
@@ -34,7 +33,8 @@
         <button class="btn" onclick="login()">Login</button>
     </div>
 
-    <div id="pwdModal" class="modal hidden">
+    <div id="pwdModal" class="hidden">
+        <div class="modal-overlay"></div>
         <div class="modal-content">
             <h3>🔒 Set Private Password</h3>
             <p style="font-size: 0.8rem; color: #666;">Security requirement: update your password to continue.</p>
