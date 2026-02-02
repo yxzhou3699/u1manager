@@ -89,16 +89,21 @@
         }).subscribe();
     }
 
-    function populateDropdown() {
-        const select = document.getElementById('nameSelect');
-        select.innerHTML = '<option value="">-- Select Name --</option>';
+function populateDropdown() {
+    const select = document.getElementById('nameSelect');
+    select.innerHTML = '<option value="">-- Select Name --</option>'; // Reset
+    
+    // Safety check: make sure fullState.players exists
+    if (fullState && fullState.players) {
         fullState.players.forEach(p => {
             const opt = document.createElement('option');
             opt.value = p.name;
+            // The logic to add the star
             opt.innerHTML = (captains.includes(p.name) ? '★ ' : '') + p.name;
             select.appendChild(opt);
         });
     }
+}
 
     function login() {
         const name = document.getElementById('nameSelect').value;
