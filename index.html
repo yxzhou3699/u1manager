@@ -67,6 +67,13 @@
 <script>
     const URL = 'https://ilbncpvwjdqwkndxhnur.supabase.co';
     const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlsYm5jcHZ3amRxd2tuZHhobnVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAwMjMwMTUsImV4cCI6MjA4NTU5OTAxNX0.kFHlgkShXsc7yZ9mrCCc_MR_XnC0QWV9cdP8XOeJp0w';
+    
+    // Check if Supabase loaded
+    if (typeof supabase === 'undefined') {
+        alert('Supabase library failed to load. Check your internet connection.');
+        throw new Error('Supabase not loaded');
+    }
+    
     const sbClient = supabase.createClient(URL, KEY);
     
     const captains = ["CY", "Tommy", "瓜瓜"];
