@@ -13,13 +13,11 @@
         .btn { cursor: pointer; border: none; padding: 12px; border-radius: 6px; font-weight: bold; width: 100%; color: white; background: #457b9d; margin-bottom: 5px; }
         .admin-panel { background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ffeeba; }
         .info-box { background: #e1f5fe; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #03a9f4; }
-        
         .player-item { padding: 10px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
         .status-pill { font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; font-weight: bold; text-transform: uppercase; }
         .going { background: #d4edda; color: #155724; }
         .not { background: #f8d7da; color: #721c24; }
         .none { background: #e9ecef; color: #6c757d; }
-        
         .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1000; }
         .modal-content { background: white; padding: 20px; border-radius: 12px; width: 80%; max-width: 350px; }
     </style>
@@ -30,15 +28,15 @@
     <h1>U1 Manager</h1>
     
     <div id="loginArea">
-        <select id="nameSelect"><option value="">-- Select Name --</option></select>
-        <input type="password" id="passInput" placeholder="Password (initial is u1)">
+        <select id="nameSelect"><option value="">Loading names...</option></select>
+        <input type="password" id="passInput" placeholder="Password (initial: u1)">
         <button class="btn" onclick="login()">Login</button>
     </div>
 
     <div id="pwdModal" class="modal hidden">
         <div class="modal-content">
             <h3>🔒 Set Private Password</h3>
-            <p style="font-size: 0.8rem; color: #666;">You are using a default password. Please update it.</p>
+            <p style="font-size: 0.8rem; color: #666;">Security requirement: update your password to continue.</p>
             <input type="password" id="newPwd" placeholder="New Password">
             <button class="btn" onclick="updatePassword()">Save & Enter</button>
         </div>
@@ -46,10 +44,10 @@
 
     <div id="appArea" class="hidden">
         <div id="adminPanel" class="admin-panel hidden">
-            <strong>Captain Control</strong>
+            <strong>Captain Dashboard</strong>
             <input type="text" id="practiceInput" placeholder="Practice Title">
-            <textarea id="planInput" placeholder="Plan/Drills"></textarea>
-            <button class="btn" style="background:#fb8500;" onclick="pushUpdate()">Update & Open Attendance</button>
+            <textarea id="planInput" placeholder="Drills/Plan"></textarea>
+            <button class="btn" style="background:#fb8500;" onclick="pushUpdate()">Publish Plan</button>
         </div>
 
         <div class="info-box">
@@ -57,22 +55,19 @@
             <div id="planDisplay" style="font-size:0.9rem; white-space:pre-wrap;"></div>
         </div>
 
-        <div id="checkInButtons" style="display:flex; gap:10px; margin-bottom:20px;">
-            <button class="btn" style="background:#2a9d8f;" onclick="setUserStatus('going')">I'm Going</button>
+        <div style="display:flex; gap:10px; margin-bottom:20px;">
+            <button class="btn" style="background:#2a9d8f;" onclick="setUserStatus('going')">Going</button>
             <button class="btn" style="background:#e63946;" onclick="setUserStatus('not')">Not Going</button>
         </div>
 
         <div id="playerList"></div>
-        <p style="text-align:center;"><a href="#" onclick="location.reload()">Logout</a></p>
     </div>
 </div>
 
 <script>
-    const SUPABASE_URL = 'https://ilbncpvwjdqwkndxhnur.supabase.co';
-    const SUPABASE_KEY = 'sb_publishable_p6-RjSe9L_k_Uni91ef5YQ_CBPI5Rh5';
-    
-    // Initialize Supabase Client correctly
-    const sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const URL = 'https://ilbncpvwjdqwkndxhnur.supabase.co';
+    const KEY = 'sb_publishable_p6-RjSe9L_k_Uni91ef5YQ_CBPI5Rh5';
+    const sbClient = supabase.createClient(URL, KEY);
     
     const captains = ["CY", "Tommy", "瓜瓜"];
     let fullState = { players: [] }; 
@@ -80,13 +75,14 @@
 
     async function init() {
         const { data, error } = await sbClient.from('team_state').select('data').eq('id', 1).single();
-        if (data) {
-            fullState = data.data;
-            populateDropdown();
-            render();
+        if (error) {
+            document.getElementById('nameSelect').innerHTML = '<option>Error loading database</option>';
+            return;
         }
+        fullState = data.data;
+        populateDropdown();
+        render();
 
-        // Real-time listener
         sbClient.channel('any').on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'team_state' }, payload => {
             fullState = payload.new.data;
             render();
@@ -99,7 +95,7 @@
         fullState.players.forEach(p => {
             const opt = document.createElement('option');
             opt.value = p.name;
-            opt.innerHTML = (captains.includes(p.name) ? '* ' : '') + p.name;
+            opt.innerHTML = (captains.includes(p.name) ? '★ ' : '') + p.name;
             select.appendChild(opt);
         });
     }
@@ -116,7 +112,7 @@
             } else {
                 showApp();
             }
-        } else { alert("Incorrect login"); }
+        } else { alert("Login failed. Check password."); }
     }
 
     async function updatePassword() {
@@ -137,8 +133,6 @@
         document.getElementById('appArea').classList.remove('hidden');
         if (captains.includes(loggedInUser.name)) {
             document.getElementById('adminPanel').classList.remove('hidden');
-            document.getElementById('practiceInput').value = fullState.currentPractice;
-            document.getElementById('planInput').value = fullState.practicePlan;
         }
         render();
     }
@@ -153,29 +147,18 @@
         fullState.currentPractice = document.getElementById('practiceInput').value;
         fullState.practicePlan = document.getElementById('planInput').value;
         await sbClient.from('team_state').update({ data: fullState }).eq('id', 1);
-        alert("Plan updated!");
+        alert("Published!");
     }
 
     function render() {
         document.getElementById('practiceDisplay').innerText = fullState.currentPractice || "TBD";
         document.getElementById('planDisplay').innerText = fullState.practicePlan || "";
-        
         const listDiv = document.getElementById('playerList');
         listDiv.innerHTML = '';
-
-        // Sort: Going first, then Not Going, then Pending
-        const sorted = [...fullState.players].sort((a,b) => {
-            const weights = { going: 1, not: 2, none: 3 };
-            return weights[a.status] - weights[b.status];
-        });
-
-        sorted.forEach(p => {
+        fullState.players.forEach(p => {
             const div = document.createElement('div');
             div.className = `player-item ${loggedInUser && p.name === loggedInUser.name ? 'me-highlight' : ''}`;
-            div.innerHTML = `
-                <span>${captains.includes(p.name) ? '<strong>*</strong> ' : ''}${p.name}</span>
-                <span class="status-pill ${p.status}">${p.status === 'none' ? '?' : p.status}</span>
-            `;
+            div.innerHTML = `<span>${p.name}</span><span class="status-pill ${p.status}">${p.status}</span>`;
             listDiv.appendChild(div);
         });
     }
