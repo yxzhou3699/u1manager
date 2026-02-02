@@ -6,86 +6,180 @@
     <title>U1 Team Manager</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        /* Existing mobile-friendly styles... */
         body { font-family: -apple-system, sans-serif; background: #f0f2f5; padding: 15px; margin: 0; }
         .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
         .hidden { display: none; }
-        .btn { cursor: pointer; border: none; padding: 12px; border-radius: 6px; font-weight: bold; width: 100%; color: white; background: #457b9d; }
+        input, select, textarea { width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+        .btn { cursor: pointer; border: none; padding: 12px; border-radius: 6px; font-weight: bold; width: 100%; color: white; background: #457b9d; margin-bottom: 5px; }
         .admin-panel { background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ffeeba; }
         .info-box { background: #e1f5fe; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #03a9f4; }
-        .status-going { background: #d4edda; color: #155724; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
-        .me-highlight { border-left: 4px solid #457b9d; background: #f1faff; padding-left: 10px; }
+        
+        .player-item { padding: 10px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        .status-pill { font-size: 0.75rem; padding: 4px 8px; border-radius: 4px; font-weight: bold; text-transform: uppercase; }
+        .going { background: #d4edda; color: #155724; }
+        .not { background: #f8d7da; color: #721c24; }
+        .none { background: #e9ecef; color: #6c757d; }
+        
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-content { background: white; padding: 20px; border-radius: 12px; width: 80%; max-width: 350px; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h1>U1 Manager</h1>
+    
     <div id="loginArea">
         <select id="nameSelect"><option value="">-- Select Name --</option></select>
-        <input type="password" id="passInput" placeholder="Password (u1)" style="width:100%; margin: 10px 0; padding: 10px;">
+        <input type="password" id="passInput" placeholder="Password (initial is u1)">
         <button class="btn" onclick="login()">Login</button>
+    </div>
+
+    <div id="pwdModal" class="modal hidden">
+        <div class="modal-content">
+            <h3>🔒 Set Private Password</h3>
+            <p style="font-size: 0.8rem; color: #666;">You are using a default password. Please update it.</p>
+            <input type="password" id="newPwd" placeholder="New Password">
+            <button class="btn" onclick="updatePassword()">Save & Enter</button>
+        </div>
     </div>
 
     <div id="appArea" class="hidden">
         <div id="adminPanel" class="admin-panel hidden">
+            <strong>Captain Control</strong>
             <input type="text" id="practiceInput" placeholder="Practice Title">
-            <textarea id="planInput" placeholder="Plan/Drills" style="width:100%; height:60px; margin-top:10px;"></textarea>
-            <button class="btn" style="background:#fb8500; margin-top:10px;" onclick="pushUpdate()">Update Team & Open</button>
+            <textarea id="planInput" placeholder="Plan/Drills"></textarea>
+            <button class="btn" style="background:#fb8500;" onclick="pushUpdate()">Update & Open Attendance</button>
         </div>
 
         <div class="info-box">
             <p><strong>Session:</strong> <span id="practiceDisplay"></span></p>
-            <p id="planDisplay" style="font-size:0.9rem; white-space:pre-wrap;"></p>
+            <div id="planDisplay" style="font-size:0.9rem; white-space:pre-wrap;"></div>
         </div>
 
         <div id="checkInButtons" style="display:flex; gap:10px; margin-bottom:20px;">
-            <button class="btn" style="background:#2a9d8f;" onclick="setUserStatus('going')">Going</button>
+            <button class="btn" style="background:#2a9d8f;" onclick="setUserStatus('going')">I'm Going</button>
             <button class="btn" style="background:#e63946;" onclick="setUserStatus('not')">Not Going</button>
         </div>
 
         <div id="playerList"></div>
+        <p style="text-align:center;"><a href="#" onclick="location.reload()">Logout</a></p>
     </div>
 </div>
 
 <script>
-    // --- SUPABASE CONFIG ---
     const SUPABASE_URL = 'https://ilbncpvwjdqwkndxhnur.supabase.co';
     const SUPABASE_KEY = 'sb_publishable_p6-RjSe9L_k_Uni91ef5YQ_CBPI5Rh5';
-    const supabase = lib.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     
-    // Core Team Data (Names from previous prompts)
+    // Initialize Supabase Client correctly
+    const sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    
     const captains = ["CY", "Tommy", "瓜瓜"];
-    let fullState = {}; 
+    let fullState = { players: [] }; 
     let loggedInUser = null;
 
-    // Load initial data and subscribe to changes
     async function init() {
-        const { data } = await supabase.from('team_state').select('data').eq('id', 1).single();
-        fullState = data.data;
-        render();
+        const { data, error } = await sbClient.from('team_state').select('data').eq('id', 1).single();
+        if (data) {
+            fullState = data.data;
+            populateDropdown();
+            render();
+        }
 
-        // REAL-TIME: Listen for any captain or player changes
-        supabase.channel('custom-all-channel')
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'team_state' }, payload => {
-                fullState = payload.new.data;
-                render();
-            }).subscribe();
+        // Real-time listener
+        sbClient.channel('any').on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'team_state' }, payload => {
+            fullState = payload.new.data;
+            render();
+        }).subscribe();
+    }
+
+    function populateDropdown() {
+        const select = document.getElementById('nameSelect');
+        select.innerHTML = '<option value="">-- Select Name --</option>';
+        fullState.players.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.name;
+            opt.innerHTML = (captains.includes(p.name) ? '* ' : '') + p.name;
+            select.appendChild(opt);
+        });
+    }
+
+    function login() {
+        const name = document.getElementById('nameSelect').value;
+        const pass = document.getElementById('passInput').value;
+        const user = fullState.players.find(p => p.name === name);
+
+        if (user && user.password === pass) {
+            loggedInUser = user;
+            if (!user.hasChangedPassword) {
+                document.getElementById('pwdModal').classList.remove('hidden');
+            } else {
+                showApp();
+            }
+        } else { alert("Incorrect login"); }
+    }
+
+    async function updatePassword() {
+        const newPass = document.getElementById('newPwd').value;
+        if (newPass.length < 2) return alert("Too short");
+        
+        const idx = fullState.players.findIndex(p => p.name === loggedInUser.name);
+        fullState.players[idx].password = newPass;
+        fullState.players[idx].hasChangedPassword = true;
+        
+        await sbClient.from('team_state').update({ data: fullState }).eq('id', 1);
+        document.getElementById('pwdModal').classList.add('hidden');
+        showApp();
+    }
+
+    function showApp() {
+        document.getElementById('loginArea').classList.add('hidden');
+        document.getElementById('appArea').classList.remove('hidden');
+        if (captains.includes(loggedInUser.name)) {
+            document.getElementById('adminPanel').classList.remove('hidden');
+            document.getElementById('practiceInput').value = fullState.currentPractice;
+            document.getElementById('planInput').value = fullState.practicePlan;
+        }
+        render();
+    }
+
+    async function setUserStatus(status) {
+        const idx = fullState.players.findIndex(p => p.name === loggedInUser.name);
+        fullState.players[idx].status = status;
+        await sbClient.from('team_state').update({ data: fullState }).eq('id', 1);
     }
 
     async function pushUpdate() {
         fullState.currentPractice = document.getElementById('practiceInput').value;
         fullState.practicePlan = document.getElementById('planInput').value;
-        await supabase.from('team_state').update({ data: fullState }).eq('id', 1);
+        await sbClient.from('team_state').update({ data: fullState }).eq('id', 1);
+        alert("Plan updated!");
     }
 
-    async function setUserStatus(status) {
-        const userIdx = fullState.players.findIndex(p => p.name === loggedInUser.name);
-        fullState.players[userIdx].status = status;
-        await supabase.from('team_state').update({ data: fullState }).eq('id', 1);
+    function render() {
+        document.getElementById('practiceDisplay').innerText = fullState.currentPractice || "TBD";
+        document.getElementById('planDisplay').innerText = fullState.practicePlan || "";
+        
+        const listDiv = document.getElementById('playerList');
+        listDiv.innerHTML = '';
+
+        // Sort: Going first, then Not Going, then Pending
+        const sorted = [...fullState.players].sort((a,b) => {
+            const weights = { going: 1, not: 2, none: 3 };
+            return weights[a.status] - weights[b.status];
+        });
+
+        sorted.forEach(p => {
+            const div = document.createElement('div');
+            div.className = `player-item ${loggedInUser && p.name === loggedInUser.name ? 'me-highlight' : ''}`;
+            div.innerHTML = `
+                <span>${captains.includes(p.name) ? '<strong>*</strong> ' : ''}${p.name}</span>
+                <span class="status-pill ${p.status}">${p.status === 'none' ? '?' : p.status}</span>
+            `;
+            listDiv.appendChild(div);
+        });
     }
 
-    // [Login and Render logic similar to before, but pulling from fullState]
     init();
 </script>
 </body>
