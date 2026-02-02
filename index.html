@@ -74,36 +74,67 @@
     let loggedInUser = null;
 
     async function init() {
-        const { data, error } = await sbClient.from('team_state').select('data').eq('id', 1).single();
-        if (error) {
-            document.getElementById('nameSelect').innerHTML = '<option>Error loading database</option>';
-            return;
-        }
-        fullState = data.data;
-        populateDropdown();
-        render();
-
-        sbClient.channel('any').on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'team_state' }, payload => {
-            fullState = payload.new.data;
+        try {
+            const { data, error } = await sbClient.from('team_state').select('data').eq('id', 1).single();
+            
+            if (error) {
+                console.error('Database error:', error);
+                document.getElementById('nameSelect').innerHTML = '<option>Error: ' + error.message + '</option>';
+                return;
+            }
+            
+            // Check if data exists and has the expected structure
+            if (!data || !data.data) {
+                console.error('No data found in database response:', data);
+                document.getElementById('nameSelect').innerHTML = '<option>No team data found</option>';
+                return;
+            }
+            
+            // Check if players array exists
+            if (!data.data.players || !Array.isArray(data.data.players)) {
+                console.error('Invalid data structure - missing players array:', data.data);
+                document.getElementById('nameSelect').innerHTML = '<option>Invalid data structure</option>';
+                return;
+            }
+            
+            fullState = data.data;
+            console.log('Loaded state with', fullState.players.length, 'players:', fullState);
+            populateDropdown();
             render();
-        }).subscribe();
+
+            sbClient.channel('any').on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'team_state' }, payload => {
+                fullState = payload.new.data;
+                populateDropdown(); // Also refresh dropdown when data updates
+                render();
+            }).subscribe();
+        } catch (err) {
+            console.error('Unexpected error in init:', err);
+            document.getElementById('nameSelect').innerHTML = '<option>Unexpected error occurred</option>';
+        }
     }
 
-function populateDropdown() {
-    const select = document.getElementById('nameSelect');
-    select.innerHTML = '<option value="">-- Select Name --</option>'; // Reset
-    
-    // Safety check: make sure fullState.players exists
-    if (fullState && fullState.players) {
-        fullState.players.forEach(p => {
-            const opt = document.createElement('option');
-            opt.value = p.name;
-            // The logic to add the star
-            opt.innerHTML = (captains.includes(p.name) ? '★ ' : '') + p.name;
-            select.appendChild(opt);
-        });
+    function populateDropdown() {
+        const select = document.getElementById('nameSelect');
+        select.innerHTML = '<option value="">-- Select Name --</option>';
+        
+        // Safety check: make sure fullState.players exists
+        if (fullState && fullState.players && Array.isArray(fullState.players)) {
+            if (fullState.players.length === 0) {
+                select.innerHTML += '<option value="">No players found</option>';
+                console.warn('Players array is empty');
+            } else {
+                fullState.players.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.name;
+                    opt.innerHTML = (captains.includes(p.name) ? '★ ' : '') + p.name;
+                    select.appendChild(opt);
+                });
+                console.log('Populated dropdown with', fullState.players.length, 'players');
+            }
+        } else {
+            console.error('Cannot populate dropdown - invalid players data');
+        }
     }
-}
 
     function login() {
         const name = document.getElementById('nameSelect').value;
